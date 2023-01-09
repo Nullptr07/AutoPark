@@ -16,7 +16,7 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent))
 from VisibilityRoadMap.geometry import Geometry
 from VoronoiRoadMap.dijkstra_search import DijkstraSearch
 
-show_animation = True
+show_animation = False
 
 
 class VisibilityRoadMap:
@@ -173,7 +173,7 @@ class ObstaclePolygon:
         self.y_list.append(self.y_list[0])
 
     def plot(self):
-        plt.plot(self.x_list, self.y_list, "-k")
+        plt.plot(self.x_list, self.y_list, "-c")
 
 
 def main():
@@ -190,14 +190,14 @@ def main():
             [20.0, 30.0, 15.0],
             [20.0, 20.0, 30.0],
         ),
-        ObstaclePolygon(
-            [40.0, 45.0, 50.0, 40.0],
-            [50.0, 40.0, 20.0, 40.0],
-        ),
-        ObstaclePolygon(
-            [20.0, 30.0, 30.0, 20.0],
-            [40.0, 45.0, 60.0, 50.0],
-        )
+        #ObstaclePolygon(
+        #    [40.0, 45.0, 50.0, 40.0],
+        #    [50.0, 40.0, 20.0, 40.0],
+        #),
+        #ObstaclePolygon(
+        #    [20.0, 30.0, 30.0, 20.0],
+        #    [40.0, 45.0, 60.0, 50.0],
+        #)
     ]
 
     if show_animation:  # pragma: no cover
@@ -210,6 +210,7 @@ def main():
 
     rx, ry = VisibilityRoadMap(expand_distance, do_plot=show_animation)\
         .planning(sx, sy, gx, gy, obstacles)
+    print(rx, ry)
 
     if show_animation:  # pragma: no cover
         plt.plot(rx, ry, "-r")

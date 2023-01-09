@@ -8,12 +8,18 @@ import numpy as np
 import random
 from time import sleep
 
+sys.path.append("./PythonRobotics-master")
+
+from PathPlanning.VisibilityRoadMap.visibility_road_map import *
+
 FPS = 60
 FPS_CLOCK = pygame.time.Clock()
 WIN_WIDTH, WIN_HEIGHT = 640, 480
 
-ROBOT_X = 10
-ROBOT_Y = 10
+ROBOT_START_X = 10
+ROBOT_START_Y = 10
+ROBOT_X = ROBOT_START_X
+ROBOT_Y = ROBOT_START_Y
 ROBOT_TH = 0 # yaw angle, the direction the robot actually facing
 ROBOT_TH_RAD = ROBOT_TH /180*math.pi
 ROBOT_DELTA = 0 # steering angle rate (but in our case it is just steering angle since we don't have a limit for the steering rate)
@@ -48,6 +54,14 @@ PARKING_LOT_L = 40
 PARKING_LOT_START_X = 300 + RENDER_MARGIN*10
 PARKING_LOT_START_Y = 10 + RENDER_MARGIN*10
 PARKING_LOT_N = 5
+
+
+OBSTACLES = [
+    ObstaclePolygon(
+        [200, 250, 180],
+        [120, 90, 30]
+    )
+]
 
 screen = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
 pygame.init()
@@ -170,6 +184,10 @@ def redraw_parking_lots():
     for i in range(5):
         pygame.draw.rect(screen, (255, 255, 255), (PARKING_LOTS_RENDER[i][0], PARKING_LOTS_RENDER[i][1], 70, 40), 2)
         pygame.draw.circle(screen, (255, 0, 255), (PARKING_LOTS_CENTER[i][0], PARKING_LOTS_CENTER[i][1]), 5)
+def redraw_obstacles():
+    global OBSTACLES
+    for obstacle in OBSTACLES:
+        pygame.draw.polygon(screen, (255, 255, 255), list(zip(obstacle.x_list, obstacle.y_list)))
 phi_ref = 0
 
 pos_err = [0, 0] # positional error
@@ -186,6 +204,7 @@ already_close_to_targ=False
 
 angle_tolerance=5
 dist_tolerance=3
+done = False
 
 def find_min_angle (targetHeading, currentHeading):
     turnAngle = targetHeading - currentHeading
@@ -193,11 +212,12 @@ def find_min_angle (targetHeading, currentHeading):
         turnAngle = -1 * np.sign(turnAngle) * (360 - abs(turnAngle))
     return turnAngle
 def move_to_point_each_frame(coord, angle_desired=None, curve_scale=2, back=False):
-    global phi_ref, pos_err, ROBOT_X, ROBOT_Y, ROBOT_TH, ROBOT_DELTA, last_pos_err, pos_integral, pos_deriv, ori_integral, ori_err, ori_deriv, last_ori_err, dyn_x, dyn_y, already_close_to_targ,angle_tolerance,dist_tolerance, ROBOT_TH_RAD, ROBOT_LAST_DELTA
+    global phi_ref, pos_err, ROBOT_X, ROBOT_Y, ROBOT_TH, ROBOT_DELTA, last_pos_err, pos_integral, pos_deriv, ori_integral, ori_err, ori_deriv, last_ori_err, dyn_x, dyn_y, already_close_to_targ,angle_tolerance,dist_tolerance, ROBOT_TH_RAD, ROBOT_LAST_DELTA, done
     
     actual_center = (ROBOT_X + 10*RENDER_MARGIN, ROBOT_Y + 10*RENDER_MARGIN)
     
     if abs(math.dist((ROBOT_X, ROBOT_Y), coord)) <= dist_tolerance and abs(wrap(ROBOT_TH - (phi_ref if angle_desired == None else angle_desired))) <= angle_tolerance:# and abs((180-ROBOT_TH) - (180-phi_ref)) <= 5:
+       done = True
        pass
     else:
        phi_ref = r2d(math.atan2(coord[1]-ROBOT_Y, coord[0]-ROBOT_X))
@@ -296,32 +316,42 @@ def move_to_point_each_frame(coord, angle_desired=None, curve_scale=2, back=Fals
        last_ori_err = ori_err
        ROBOT_LAST_DELTA = ROBOT_DELTA
 # Game loop.
-dyn_x=ROBOT_X
-dyn_y=-1
-dyn_th=-1
 TARG_PARKING_LOT = 2
-
-def spline_out(x):
-    global ROBOT_X, ROBOT_Y, PARKING_LOTS_CENTER, TARG_PARKING_LOT
-    x_pts = [0, PARKING_LOTS_CENTER[TARG_PARKING_LOT][0]]
-    y_pts = [0, PARKING_LOTS_CENTER[TARG_PARKING_LOT][1]]
-    tck = interpolate.splrep(x_pts, y_pts, k =1)
-    return interpolate.splev(x, tck)
-
 init_parking_lots()
+
+x_arr, y_arr= VisibilityRoadMap(20).planning(
+    ROBOT_START_X,
+    ROBOT_START_Y,
+    PARKING_LOTS_CENTER[TARG_PARKING_LOT][0] - 10*RENDER_MARGIN,
+    PARKING_LOTS_CENTER[TARG_PARKING_LOT][1] - 10*RENDER_MARGIN,
+    OBSTACLES
+)
+pt_idx = 0
+ROBOT_TH = r2d(math.atan2(y_arr[0]-ROBOT_Y, x_arr[0]-ROBOT_X))
+
 while True:
     screen.fill((0, 0, 0))
     redraw_parking_lots()
+    redraw_obstacles()
     for event in pygame.event.get():
         if event.type == QUIT:
             pygame.quit()
             sys.exit()
     # Update.
-    pygame.draw.circle(screen, (255, 0, 255), (dyn_x+10*RENDER_MARGIN, dyn_y+10*RENDER_MARGIN), 5)
-    dyn_x += .1
-    #print(PARKING_LOTS_CENTER[0])
+    
+    for item in list(zip(x_arr, y_arr)):
+        pygame.draw.circle(screen, (255, 0, 255), (item[0]+10*RENDER_MARGIN, item[1]+10*RENDER_MARGIN), 5)
+    
+    print(x_arr, y_arr)
     angle_tolerance = 1
-    move_to_point_each_frame((420 - 10*RENDER_MARGIN, 100 - 10*RENDER_MARGIN), 270)
+    if pt_idx < len(x_arr):
+        done = False
+        move_to_point_each_frame((x_arr[pt_idx], y_arr[pt_idx]))
+    
+    if done:
+        pt_idx += 1
+    
+    print(pt_idx)
     
     #dyn_y = dyn_x * 1.1
     #dyn_th += 1
